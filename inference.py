@@ -1,47 +1,41 @@
+import io
 import torch
-from database import db, fs
-from processor import preprocess_image
+from PIL import Image
 from model import load_medical_model
+from processor import preprocess_image, generate_gradcam
 
-try:
-    _model, _classes = load_medical_model()
-except Exception as e:
-    print(f"❌ Failed to load model: {e}")
-    raise
+# Load model once at startup
+model, classes = load_medical_model()
 
-def run_diagnosis(patient_name: str):
-    print(f"\n🔍 Analyzing: {patient_name}...")
-    try:
-        patient = db.patients.find_one({"name": patient_name})
-        if not patient:
-            print(f"❌ Patient '{patient_name}' not found.")
-            return None
-
-        image_bytes  = fs.get(patient['image_id']).read()
-        image_tensor = preprocess_image(image_bytes)
-
-        with torch.no_grad():
-            outputs    = _model(image_tensor)
-            probs      = torch.nn.functional.softmax(outputs, dim=1)[0]
-            pred_idx   = probs.argmax().item()
-            prediction = _classes[pred_idx]
-            confidence = probs[pred_idx].item() * 100
-
-        diagnosis_text = f"{prediction} ({confidence:.2f}% confidence)"
-
-        db.patients.update_one(
-            {"_id": patient["_id"]},
-            {"$set": {
-                "prediction":       diagnosis_text,
-                "normal_prob":      round(probs[0].item() * 100, 2),
-                "pneumonia_prob":   round(probs[1].item() * 100, 2),
-            }}
-        )
-        print(f"🏥 {diagnosis_text}")
-        return diagnosis_text
-
-    except Exception as e:
-        import traceback
-        print(f"❌ Diagnosis error: {e}")
-        traceback.print_exc()
-        return None
+def run_diagnosis(raw_bytes: bytes):
+    # 1. Convert raw bytes into PIL Image (RGB)
+    pil_image = Image.open(io.BytesIO(raw_bytes)).convert("RGB")
+    
+    # 2. Preprocess tensor for ResNet50 input
+    input_tensor = preprocess_image(pil_image)
+    
+    # 3. Model Inference
+    model.eval()
+    with torch.no_grad():
+        outputs = model(input_tensor)
+        probabilities = torch.softmax(outputs, dim=1)[0]
+        
+        # Extract direct probabilities (Index 0: NORMAL, Index 1: PNEUMONIA)
+        normal_prob = probabilities[0].item()
+        pneumonia_prob = probabilities[1].item()
+        
+        # Clinical Decision Thresholding (Default: 0.40)
+        # Lowers false-negative rates for screening false "NORMAL" scans
+        CLINICAL_THRESHOLD = 0.70
+        
+        if pneumonia_prob >= CLINICAL_THRESHOLD:
+            prediction = "PNEUMONIA"
+            confidence = pneumonia_prob * 100
+        else:
+            prediction = "NORMAL"
+            confidence = normal_prob * 100
+            
+    # 4. Generate Grad-CAM composite map
+    gradcam_bytes = generate_gradcam(model, input_tensor, pil_image)
+    
+    return prediction, confidence, gradcam_bytes
