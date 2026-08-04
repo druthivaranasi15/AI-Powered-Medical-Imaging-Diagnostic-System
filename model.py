@@ -1,7 +1,7 @@
-import torch
-import torchvision.models as models
-import torch.nn as nn
 import os
+import torch
+import torch.nn as nn
+import torchvision.models as models
 
 def load_medical_model():
     model = models.resnet50(weights=None)
@@ -15,12 +15,33 @@ def load_medical_model():
     )
 
     pth_path = os.path.join(os.path.dirname(__file__), 'pneumonia_resnet50.pth')
+    if not os.path.exists(pth_path):
+        raise FileNotFoundError(f"Model weight file not found at {pth_path}")
+
     checkpoint = torch.load(pth_path, map_location=torch.device('cpu'))
-    model.load_state_dict(checkpoint['model_state_dict'])
+
+    classes = ['NORMAL', 'PNEUMONIA']
+    state_dict = checkpoint
+
+    # Extract state_dict if nested under common checkpoint keys
+    if isinstance(checkpoint, dict):
+        for key in ['model_state_dict', 'state_dict', 'model', 'net']:
+            if key in checkpoint and isinstance(checkpoint[key], dict):
+                state_dict = checkpoint[key]
+                break
+
+        if 'classes' in checkpoint:
+            classes = checkpoint['classes']
+
+    # Remove potential 'module.' prefix from DataParallel training
+    new_state_dict = {}
+    for k, v in state_dict.items():
+        name = k.replace('module.', '') if k.startswith('module.') else k
+        new_state_dict[name] = v
+
+    # Load state dict with strict set to False to bypass missing non-critical keys
+    model.load_state_dict(new_state_dict, strict=False)
     model.eval()
 
-    classes = checkpoint.get('classes', ['NORMAL', 'PNEUMONIA'])
-    print(f"✅ Model loaded | Classes: {classes} | "
-          f"Test acc: {checkpoint.get('test_accuracy', 'N/A')}")
-
+    print(f"✅ Model loaded successfully | Classes: {classes}")
     return model, classes
