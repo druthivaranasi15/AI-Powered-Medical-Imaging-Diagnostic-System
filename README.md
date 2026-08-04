@@ -38,20 +38,56 @@ Always consult qualified medical professionals. Any deployment must comply with 
 
 Evaluation metrics from the training notebook (see `notebooks/training-model.ipynb`):
 
+### Summary Metrics
+
 | Metric | Value | Notes |
 |--------|-------|-------|
 | **Test Set Size** | 624 images | NORMAL: 234, PNEUMONIA: 390 |
-| **Accuracy** | 0.88 | Overall correctness |
+| **Overall Accuracy** | 0.88 (88%) | Overall correctness across all samples |
 | **ROC-AUC** | 0.964 | Excellent discrimination ability |
-| **Sensitivity** (PNEUMONIA Recall) | ~0.98 | High true positive rate (screening priority) |
-| **Specificity** (NORMAL Recall) | ~0.71 | Lower due to class imbalance |
+| **Sensitivity** (PNEUMONIA Recall) | ~0.98 (98%) | High true positive rate (screening priority) |
+| **Specificity** (NORMAL Recall) | ~0.71 (71%) | Lower due to class imbalance |
 | **Decision Threshold** | 0.70 | Optimized for sensitivity; tune per use-case |
 
-### ⚠️ Performance Notes
-- **Class Imbalance**: Test set heavily weighted toward PNEUMONIA (390 vs 234 NORMAL) explains lower specificity
-- **Dataset Source**: [ChexPert/NIH Chest X-ray Dataset] — validate performance on your own dataset
-- **Preprocessing**: CLAHE (Contrast Limited Adaptive Histogram Equalization) + resizing to 224×224
-- **External Validation**: Strongly recommended before any real-world deployment
+### Detailed Classification Report
+
+```
+--- FINAL CLINICAL EVALUATION METRICS (TEST SET) ---
+              precision    recall  f1-score   support
+
+      NORMAL       0.96      0.71      0.82       234
+   PNEUMONIA       0.85      0.98      0.91       390
+
+    accuracy                           0.88       624
+   macro avg       0.90      0.85      0.86       624
+weighted avg       0.89      0.88      0.88       624
+```
+
+#### Metric Interpretation
+
+| Class | Precision | Recall | F1-Score | Support | Interpretation |
+|-------|-----------|--------|----------|---------|-----------------|
+| **NORMAL** | 0.96 | 0.71 | 0.82 | 234 | 96% of predicted NORMAL cases are correct; 71% of actual NORMAL cases are detected |
+| **PNEUMONIA** | 0.85 | 0.98 | 0.91 | 390 | 85% of predicted PNEUMONIA cases are correct; 98% of actual PNEUMONIA cases are detected |
+| **Weighted Avg** | 0.89 | 0.88 | 0.88 | 624 | Overall performance accounting for class imbalance |
+
+### ⚠️ Performance Analysis
+
+**Why is NORMAL specificity lower (71%)?**
+- The test set is heavily imbalanced: 390 PNEUMONIA vs 234 NORMAL samples (62.5% vs 37.5%)
+- The model is optimized for sensitivity (recall of PNEUMONIA) to prioritize screening—missing pneumonia cases is more critical than false positives
+- Decision threshold of 0.70 prioritizes sensitivity; can be tuned to improve specificity if needed
+
+**Key Insights:**
+- ✅ **High PNEUMONIA Recall (98%)**: Excellent for screening—catches 98% of actual pneumonia cases
+- ✅ **High NORMAL Precision (96%)**: When the model predicts NORMAL, it's correct 96% of the time
+- ⚠️ **Lower NORMAL Recall (71%)**: Some normal cases are misclassified as PNEUMONIA (false positives)
+- ✅ **Balanced F1-Scores**: Both classes have reasonable F1 scores (0.82 for NORMAL, 0.91 for PNEUMONIA)
+
+**Recommended Use:**
+- Use this model for **screening and initial triage** in clinical workflows
+- A radiologist should always review AI predictions, especially for NORMAL predictions (when 29% might be missed)
+- Consider the 0.70 threshold tunable per clinical context
 
 ---
 
