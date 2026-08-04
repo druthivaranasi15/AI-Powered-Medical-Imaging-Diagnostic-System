@@ -71,7 +71,7 @@ weighted avg       0.89      0.88      0.88       624
 | **PNEUMONIA** | 0.85 | 0.98 | 0.91 | 390 | 85% of predicted PNEUMONIA cases are correct; 98% of actual PNEUMONIA cases are detected |
 | **Weighted Avg** | 0.89 | 0.88 | 0.88 | 624 | Overall performance accounting for class imbalance |
 
-### ⚠️ Performance Analysis
+###  Performance Analysis
 
 **Why is NORMAL specificity lower (71%)?**
 - The test set is heavily imbalanced: 390 PNEUMONIA vs 234 NORMAL samples (62.5% vs 37.5%)
